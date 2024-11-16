@@ -166,6 +166,7 @@ int main(int argc, char *argv[])
             return 1;
         }
     }
+    
     ColaCircular cola(initialSize);
 
     std::vector<std::thread> productores;
