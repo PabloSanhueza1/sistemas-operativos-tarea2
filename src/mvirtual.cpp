@@ -148,7 +148,15 @@ int main(int argc, char *argv[])
         switch (opt)
         {
         case 'm':
-            numFrames = std::stoi(optarg);
+            try 
+            {
+                numFrames = std::stoi(optarg);
+            } 
+            catch (const std::invalid_argument& e) 
+            {
+                std::cerr << "El tamaño de marco no es un entero" << std::endl;
+                return 1;
+            }    
             break;
         case 'a':
             algorithm = optarg;
@@ -161,7 +169,13 @@ int main(int argc, char *argv[])
             return 1;
         }
     }
-
+    
+    if (numFrames < 1) 
+    {
+        std::cerr << "Debe ingresar número de marcos válido." << std::endl;
+        return 1;
+    }
+    
     std::vector<int> pageRefs;
     loadReferences(filename, pageRefs); // Carga las referencias de página
 
