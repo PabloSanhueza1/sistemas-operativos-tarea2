@@ -26,9 +26,10 @@ private:
     std::condition_variable condVar;
 
     bool stop;
+    int waitTime; 
 
 public:
-    ColaCircular(int size) : maxSize(size), head(0), tail(0), count(0), stop(false)
+    ColaCircular(int size, int tiempoEspera) : maxSize(size), head(0), tail(0), count(0), stop(false), waitTime(tiempoEspera)
     {
         // cabeza y cola comienzan al principio de la cola (0). Así como count es 0, porque obviamente, no hay elementos en la cola.
         queue.resize(size);
@@ -62,23 +63,35 @@ public:
     int extraer()
     {
         std::unique_lock<std::mutex> lock(mtx);
-        condVar.wait(lock, [this]
-                     { return count > 0 || stop; });
-        // Si no se cumple condicion anterior, la hebra permanecera en espera
 
-        if (stop && count == 0)
+        // Espera hasta que haya elementos o el temporizador expire tras detener producción
+        if (condVar.wait_for(lock, std::chrono::seconds(waitTime), [this] { return count > 0 || stop; }))
         {
-            // Cuando esto se cumpla, se debe detener el consumidor (no quedan elementos y ya nadie produce)
+            // Si no quedan elementos y `stop` está activado, termina
+            if (stop && count == 0)
+            {
+                // Cuando esto se cumpla, se debe detener el consumidor (no quedan elementos y ya nadie produce)
+                return -1;
+            }
+
+            int item = queue[head];
+            head = (head + 1) % maxSize;
+            count--;
+
+            // Reducir a la mitad si es menor o igual al 25% de capacidad
+            if (count <= maxSize / 4 && maxSize > 1)
+            {
+                resizeHalf();
+            }
+
+            return item;
+        }
+        else
+        {
+            // Timeout: termina si no hay actividad en el tiempo especificado
             return -1;
         }
-
-        int item = queue[head];
-        head = (head + 1) % maxSize;
-        count--;
-
-        return item;
     }
-
     void resize()
     {
         /*
@@ -88,6 +101,22 @@ public:
 
         logChange("Duplicado");
         int newSize = maxSize * 2;
+        std::vector<int> newQueue(newSize);
+        for (int i = 0; i < count; ++i)
+        {
+            newQueue[i] = queue[head];
+            head = (head + 1) % maxSize;
+        }
+        queue = std::move(newQueue);
+        maxSize = newSize;
+        head = 0;
+        tail = count;
+    }
+
+    void resizeHalf()
+    {
+        logChange("Reducido");
+        int newSize = maxSize / 2;
         std::vector<int> newQueue(newSize);
         for (int i = 0; i < count; ++i)
         {
@@ -166,7 +195,8 @@ int main(int argc, char *argv[])
             return 1;
         }
     }
-    ColaCircular cola(initialSize);
+    
+    ColaCircular cola(initialSize, tiempoEspera);
 
     std::vector<std::thread> productores;
     std::vector<std::thread> consumidores;
