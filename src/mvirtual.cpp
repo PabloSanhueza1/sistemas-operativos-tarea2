@@ -5,6 +5,60 @@
 #include <unistd.h>
 #include <string>
 #include <algorithm>
+#include <random>
+#include <set>
+#include <unordered_map>
+
+class TablePages {
+    private:
+    std::unordered_map<int, int> marcosPagina;
+    std::set<int> available;
+    int capacity;
+    
+    public:
+	TablePages(int numFrames) {
+        capacity = numFrames;
+		for (int i=1;i<=numFrames;i++)
+		    available.insert(i);
+	}
+    // retorna verdadero si quita marco a lowPriorityVP
+    bool getFrame(int virtualPageNeeded, int lowPriorityVP) {
+        if (referencedVirtualPage(virtualPageNeeded))
+			return false;
+
+        bool g = false;
+        if (isFull()) {
+            int marco = marcosPagina[lowPriorityVP];
+            available.insert(marco);
+            marcosPagina.erase(lowPriorityVP);
+            printf("Got physical page %d, from %d\n", marco, lowPriorityVP);
+            g = true;
+        }
+		int marcoDisponible = *available.begin();
+        printf("Gave physical page %d to virtual page %d\n", marcoDisponible, virtualPageNeeded);
+		marcosPagina[virtualPageNeeded] = marcoDisponible;
+        available.erase(marcoDisponible);
+		return g;
+	}
+	bool referencedVirtualPage(int virtualPage) {
+		return marcosPagina.count(virtualPage) > 0;
+	}
+    unsigned size() {
+        return marcosPagina.size();
+    }
+    bool isFull() {
+        return marcosPagina.size() == capacity;
+    }
+    void print() {
+        printf("--> ");
+        for (std::unordered_map<int, int>::iterator it = marcosPagina.begin(); it != marcosPagina.end(); it++)
+            printf("%2d ", it->first);
+        printf("\n--> ");
+        for (std::unordered_map<int, int>::iterator it = marcosPagina.begin(); it != marcosPagina.end(); it++)
+            printf("%2d ", it->second);
+        printf("\n");
+    }
+};
 
 void loadReferences(const std::string &filename, std::vector<int> &pageRefs)
 {
@@ -23,85 +77,116 @@ void loadReferences(const std::string &filename, std::vector<int> &pageRefs)
 }
 
 // Algoritmo FIFO
-int simulateFIFO(const std::vector<int> &pageRefs, int numFrames)
-{
-    std::queue<int> frameQueue; // Cola para mantener el orden de llegada de páginas
-    std::vector<int> frames;    // Vector para verificar las páginas en memoria
+int simulateFIFO(const std::vector<int> &pageRefs, int numFrames) {
+    std::queue<int> virtualPages; // Cola para mantener el orden de llegada de páginas virtuales
+    TablePages *tp = new TablePages(numFrames);
+
     int pageFaults = 0;         // Contador de fallos de página
 
-    for (int page : pageRefs)
-    { // Recorre cada referencia de página
-        if (find(frames.begin(), frames.end(), page) == frames.end())
-        {                 // Si la página no está en memoria
-            pageFaults++; // Incrementa los fallos de página
-            if (frameQueue.size() == numFrames)
-            {                                                                   // Si la memoria está llena
-                int pageToRemove = frameQueue.front();                          // Página más antigua
-                frameQueue.pop();                                               // Elimina de la cola
-                frames.erase(find(frames.begin(), frames.end(), pageToRemove)); // Elimina de memoria
-            }
-            frameQueue.push(page);  // Agrega la nueva página a la cola
-            frames.push_back(page); // La registra en memoria
+    for (int i = 0; i < pageRefs.size(); i++) {
+        int page = pageRefs[i];
+        // printf("%2d: %d \n", i, page);
+        // tp->print();
+
+        if (!tp->referencedVirtualPage(page)) {
+            pageFaults++;
+            
+            if (tp->getFrame(page, virtualPages.front())) // el marco fue reasignado
+                virtualPages.pop();
+
+            virtualPages.push(page);
         }
+        // else
+        //     printf("HIT\n");
+        
+        // printf("\n");
     }
     return pageFaults; // Devuelve el total de fallos de página
 }
 
 // Algoritmo LRU
-int simulateLRU(const std::vector<int> &pageRefs, int numFrames)
-{
+int simulateLRU(const std::vector<int> &pageRefs, int numFrames) {
     std::vector<int> frames;
     int pageFaults = 0;
 
-    for (int page : pageRefs)
-    {                                                            // Recorre cada referencia de página
-        auto it = std::find(frames.begin(), frames.end(), page); // Busca la página en memoria
-        if (it == frames.end())
-        {                 // Si la página no está en memoria
-            pageFaults++; // Incrementa los fallos de página
-            if (frames.size() == numFrames)
-            {                                 // Si la memoria está llena
-                frames.erase(frames.begin()); // Elimina la página menos usada (la primera)
-            }
-            frames.push_back(page); // Agrega la nueva página al final
+    TablePages *tp = new TablePages(numFrames);
+
+    int i = 0;
+    for (int page : pageRefs) { 
+        i++;
+        std::vector<int>::iterator it = find(frames.begin(), frames.end(), page);
+
+        if (!tp->referencedVirtualPage(page)) {
+            pageFaults++;
+
+            int lowprio = -1;
+            if (!frames.empty())
+                lowprio = frames[0];
+
+            if (tp->getFrame(page, lowprio)) // el marco fue reasignado
+                frames.erase(frames.begin());
+            
+            frames.push_back(page);
         }
-        else
-        {
-            frames.erase(it);       // Elimina la página existente
-            frames.push_back(page); // La mueve al final (más recientemente usada)
+        else {
+            frames.erase(it);
+            frames.push_back(page);
         }
     }
     return pageFaults; // Devuelve el total de fallos de página
 }
 
 // Algoritmo Óptimo
-int simulateOptimal(const std::vector<int> &pageRefs, int numFrames)
-{
+int simulateOptimal(const std::vector<int> &pageRefs, int numFrames) {
     std::vector<int> frames;
     int pageFaults = 0;
+    TablePages *tp = new TablePages(numFrames);
 
-    for (int i = 0; i < pageRefs.size(); ++i)
-    { // Recorre cada referencia de página
+    for (int i = 0; i < pageRefs.size(); ++i) { // Recorre cada referencia de página
         int page = pageRefs[i];
-        if (std::find(frames.begin(), frames.end(), page) == frames.end())
-        {                 // Si no está en memoria
-            pageFaults++; // Incrementa los fallos de página
-            if (frames.size() == numFrames)
-            { // Si la memoria está llena
-                int farthest = -1, indexToReplace = -1;
-                for (int j = 0; j < frames.size(); ++j)
-                {
+        printf("%d: %d\n", i+1, page);
+
+        if (!tp->referencedVirtualPage(page)) {
+            printf("MISS\n");
+            pageFaults++;
+
+            int pv = -1;
+            if (tp->isFull()) {
+                int indexToReplace = 0;
+                int farthest = find(pageRefs.begin() + i + 1, pageRefs.end(), frames[0]) - pageRefs.begin();
+                for (int j = 1; j < frames.size(); ++j) {
                     int nextUse = find(pageRefs.begin() + i + 1, pageRefs.end(), frames[j]) - pageRefs.begin();
-                    if (nextUse > farthest)
-                    { // Busca la página que se usará más tarde
+                    if (nextUse > farthest) { // Busca la página que se usará más tarde
                         farthest = nextUse;
                         indexToReplace = j;
                     }
                 }
-                frames.erase(frames.begin() + indexToReplace); // Reemplaza esa página
+                pv = frames[indexToReplace];
             }
-            frames.push_back(page); // Agrega la nueva página
+            else
+                frames.push_back(page);
+
+            tp->getFrame(pageRefs[i], pv);
         }
+        else
+            printf("HIT\n");
+
+        // if (std::find(frames.begin(), frames.end(), page) == frames.end()){
+        //     pageFaults++;
+        //     if (frames.size() == numFrames) { // Si la memoria está llena
+        //         int farthest = -1, indexToReplace = -1;
+        //         for (int j = 0; j < frames.size(); ++j) {
+        //             int nextUse = find(pageRefs.begin() + i + 1, pageRefs.end(), frames[j]) - pageRefs.begin();
+        //             if (nextUse > farthest) { // Busca la página que se usará más tarde
+        //                 farthest = nextUse;
+        //                 indexToReplace = j;
+        //             }
+        //         }
+
+        //         frames.erase(frames.begin() + indexToReplace); // Reemplaza esa página
+        //     }
+        //     frames.push_back(page); // Agrega la nueva página
+        // }
     }
     return pageFaults; // Devuelve el total de fallos de página
 }
@@ -136,8 +221,7 @@ int simulateClock(const std::vector<int> &pageRefs, int numFrames)
     return pageFaults; // Devuelve el total de fallos de página
 }
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
     int numFrames = 0;
     std::string algorithm;
     std::string filename;
@@ -202,6 +286,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    std::cout << pageRefs.size()-pageFaults << " - " << pageFaults << std::endl;
     std::cout << "Fallos de página: " << pageFaults << std::endl; // Imprime los fallos de página
     return 0;
 }
