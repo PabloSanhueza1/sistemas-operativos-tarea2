@@ -56,6 +56,7 @@ public:
         queue[tail] = item;
         tail = (tail + 1) % maxSize;
         count++;
+        logChange("Producido: " + std::to_string(item) + ". Tamaño actual: " + std::to_string(count));
         condVar.notify_one();
     }
 
@@ -70,6 +71,7 @@ public:
             // Si no quedan elementos y `stop` está activado, termina
             if (stop && count == 0)
             {
+                logChange("No hay más elementos que consumir. Fin del consumidor.");
                 // Cuando esto se cumpla, se debe detener el consumidor (no quedan elementos y ya nadie produce)
                 return -1;
             }
@@ -78,8 +80,9 @@ public:
             head = (head + 1) % maxSize;
             count--;
 
+            logChange("Consumido: " + std::to_string(item) + ". Tamaño actual: " + std::to_string(count));
             // Reducir a la mitad si es menor o igual al 25% de capacidad
-            if (count <= maxSize / 4 && maxSize > 1)
+            if (count <= maxSize / 4 && maxSize > 1 && count > 0)
             {
                 resizeHalf();
             }
@@ -87,7 +90,8 @@ public:
             return item;
         }
         else
-        {
+        {  
+            logChange("Tiempo de espera agotado. No hay más elementos.");
             // Timeout: termina si no hay actividad en el tiempo especificado
             return -1;
         }
@@ -99,8 +103,8 @@ public:
             por lo que no es necesario un mutex adicional.
         */
 
-        logChange("Duplicado");
         int newSize = maxSize * 2;
+        logChange("Duplicado", maxSize, newSize);
         std::vector<int> newQueue(newSize);
         for (int i = 0; i < count; ++i)
         {
@@ -115,8 +119,8 @@ public:
 
     void resizeHalf()
     {
-        logChange("Reducido");
         int newSize = maxSize / 2;
+        logChange("Reducido", maxSize, newSize);
         std::vector<int> newQueue(newSize);
         for (int i = 0; i < count; ++i)
         {
@@ -129,10 +133,15 @@ public:
         tail = count;
     }
 
-    void logChange(const std::string &action)
+    void logChange(const std::string &action, int tamAnterior, int tamNuevo)
     {
         // action puede ser 'Duplicado' o 'Reducido'
-        logFile << "Cambio de tamaño de la cola: " << action << " a " << maxSize << " elementos." << std::endl;
+        logFile << "Cambio de tamaño de la cola: " << action << " de " << tamAnterior << "(" << count << ")" << " a " << tamNuevo << " elementos." << std::endl;
+    }
+
+    void logChange(const std::string &message)
+    {
+        logFile << message << std::endl;
     }
 
     void detener()
@@ -196,6 +205,12 @@ int main(int argc, char *argv[])
         }
     }
     
+    if (cantProductores <= 0 || cantConsumidores <= 0 || initialSize <= 0 || tiempoEspera <= 0) 
+    {
+        std::cerr << "Todos los parámetros deben ser positivos." << std::endl;
+        return 1;
+    }
+
     ColaCircular cola(initialSize, tiempoEspera);
 
     std::vector<std::thread> productores;
