@@ -26,9 +26,10 @@ private:
     std::condition_variable condVar;
 
     bool stop;
+    int waitTime; 
 
 public:
-    ColaCircular(int size) : maxSize(size), head(0), tail(0), count(0), stop(false)
+    ColaCircular(int size, int tiempoEspera) : maxSize(size), head(0), tail(0), count(0), stop(false), waitTime(tiempoEspera)
     {
         // cabeza y cola comienzan al principio de la cola (0). Así como count es 0, porque obviamente, no hay elementos en la cola.
         queue.resize(size);
@@ -55,6 +56,7 @@ public:
         queue[tail] = item;
         tail = (tail + 1) % maxSize;
         count++;
+        logChange("Producido: " + std::to_string(item) + ". Tamaño actual: " + std::to_string(count));
         condVar.notify_one();
     }
 
@@ -62,23 +64,38 @@ public:
     int extraer()
     {
         std::unique_lock<std::mutex> lock(mtx);
-        condVar.wait(lock, [this]
-                     { return count > 0 || stop; });
-        // Si no se cumple condicion anterior, la hebra permanecera en espera
 
-        if (stop && count == 0)
+        // Espera hasta que haya elementos o el temporizador expire tras detener producción
+        if (condVar.wait_for(lock, std::chrono::seconds(waitTime), [this] { return count > 0 || stop; }))
         {
-            // Cuando esto se cumpla, se debe detener el consumidor (no quedan elementos y ya nadie produce)
+            // Si no quedan elementos y `stop` está activado, termina
+            if (stop && count == 0)
+            {
+                logChange("No hay más elementos que consumir. Fin del consumidor.");
+                // Cuando esto se cumpla, se debe detener el consumidor (no quedan elementos y ya nadie produce)
+                return -1;
+            }
+
+            int item = queue[head];
+            head = (head + 1) % maxSize;
+            count--;
+
+            logChange("Consumido: " + std::to_string(item) + ". Tamaño actual: " + std::to_string(count));
+            // Reducir a la mitad si es menor o igual al 25% de capacidad
+            if (count <= maxSize / 4 && maxSize > 1 && count > 0)
+            {
+                resizeHalf();
+            }
+
+            return item;
+        }
+        else
+        {  
+            logChange("Tiempo de espera agotado. No hay más elementos.");
+            // Timeout: termina si no hay actividad en el tiempo especificado
             return -1;
         }
-
-        int item = queue[head];
-        head = (head + 1) % maxSize;
-        count--;
-
-        return item;
     }
-
     void resize()
     {
         /*
@@ -86,8 +103,8 @@ public:
             por lo que no es necesario un mutex adicional.
         */
 
-        logChange("Duplicado");
         int newSize = maxSize * 2;
+        logChange("Duplicado", maxSize, newSize);
         std::vector<int> newQueue(newSize);
         for (int i = 0; i < count; ++i)
         {
@@ -100,10 +117,31 @@ public:
         tail = count;
     }
 
-    void logChange(const std::string &action)
+    void resizeHalf()
+    {
+        int newSize = maxSize / 2;
+        logChange("Reducido", maxSize, newSize);
+        std::vector<int> newQueue(newSize);
+        for (int i = 0; i < count; ++i)
+        {
+            newQueue[i] = queue[head];
+            head = (head + 1) % maxSize;
+        }
+        queue = std::move(newQueue);
+        maxSize = newSize;
+        head = 0;
+        tail = count;
+    }
+
+    void logChange(const std::string &action, int tamAnterior, int tamNuevo)
     {
         // action puede ser 'Duplicado' o 'Reducido'
-        logFile << "Cambio de tamaño de la cola: " << action << " a " << maxSize << " elementos." << std::endl;
+        logFile << "Cambio de tamaño de la cola: " << action << " de " << tamAnterior << " (actualmente hay:" << count << ")" << " a " << tamNuevo << " elementos." << std::endl;
+    }
+
+    void logChange(const std::string &message)
+    {
+        logFile << message << std::endl;
     }
 
     void detener()
@@ -167,7 +205,13 @@ int main(int argc, char *argv[])
         }
     }
     
-    ColaCircular cola(initialSize);
+    if (cantProductores <= 0 || cantConsumidores <= 0 || initialSize <= 0 || tiempoEspera <= 0) 
+    {
+        std::cerr << "Todos los parámetros deben ser positivos." << std::endl;
+        return 1;
+    }
+
+    ColaCircular cola(initialSize, tiempoEspera);
 
     std::vector<std::thread> productores;
     std::vector<std::thread> consumidores;

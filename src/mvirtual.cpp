@@ -286,7 +286,11 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+<<<<<<< HEAD
     std::cout << pageRefs.size()-pageFaults << " - " << pageFaults << std::endl;
     std::cout << "Fallos de página: " << pageFaults << std::endl; // Imprime los fallos de página
+=======
+    std::cout << "Fallos de pagina: " << pageFaults << std::endl; // Imprime los fallos de página
+>>>>>>> main
     return 0;
 }
