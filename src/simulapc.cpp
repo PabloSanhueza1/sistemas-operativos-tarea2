@@ -10,9 +10,6 @@
 #include <mutex>
 #include <condition_variable>
 
-// esto para registrar cambios en el tamaño de la cola
-// std::ofstream logFile("log.txt");
-
 class ColaCircular
 {
 private:
@@ -158,7 +155,6 @@ void productor(ColaCircular &cola, int id, int num_items)
     {
         int item = id * 100 + i;
         cola.insertar(item);
-        // std::this_thread::sleep_for(std::chrono::milliseconds(100)); // tiempo de producción
     }
 }
 
