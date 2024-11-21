@@ -202,6 +202,6 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    std::cout << "Fallos de página: " << pageFaults << std::endl; // Imprime los fallos de página
+    std::cout << "Fallos de pagina: " << pageFaults << std::endl; // Imprime los fallos de página
     return 0;
 }
