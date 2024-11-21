@@ -76,7 +76,6 @@ void loadReferences(const std::string &filename, std::vector<int> &pageRefs)
     file.close(); // Cierra el archivo después de leerlo
 }
 
-// Algoritmo FIFO
 int simulateFIFO(const std::vector<int> &pageRefs, int numFrames) {
     std::queue<int> virtualPages; // Cola para mantener el orden de llegada de páginas virtuales
     TablePages *tp = new TablePages(numFrames);
@@ -85,26 +84,20 @@ int simulateFIFO(const std::vector<int> &pageRefs, int numFrames) {
 
     for (int i = 0; i < pageRefs.size(); i++) {
         int page = pageRefs[i];
-        // printf("%2d: %d \n", i, page);
-        // tp->print();
 
         if (!tp->referencedVirtualPage(page)) {
             pageFaults++;
-            
-            if (tp->getFrame(page, virtualPages.front())) // el marco fue reasignado
+
+            // el marco fue reasignado
+            if (tp->getFrame(page, virtualPages.front()))
                 virtualPages.pop();
 
             virtualPages.push(page);
         }
-        // else
-        //     printf("HIT\n");
-        
-        // printf("\n");
     }
     return pageFaults; // Devuelve el total de fallos de página
 }
 
-// Algoritmo LRU
 int simulateLRU(const std::vector<int> &pageRefs, int numFrames) {
     std::vector<int> frames;
     int pageFaults = 0;
@@ -136,7 +129,25 @@ int simulateLRU(const std::vector<int> &pageRefs, int numFrames) {
     return pageFaults; // Devuelve el total de fallos de página
 }
 
-// Algoritmo Óptimo
+// retorna indice
+int farthest(const std::vector<int> &pageRefs, const std::vector<int> &frames, int from) {
+    if (frames.empty())
+        return -1;
+    int indexToReplace = 0;
+    int mx = find(pageRefs.begin() + from + 1, pageRefs.end(), frames[0]) - pageRefs.end();
+    printf("d%d %d\n", frames[0], mx);
+    int distance;
+    for (int i = 1; i < frames.size(); i++) {
+        distance = find(pageRefs.begin() + from + 1, pageRefs.end(), frames[i]) - pageRefs.end();
+        printf("d%d %d\n", frames[i], distance);
+        if (distance > mx) {
+            mx = distance;
+            indexToReplace = i;
+        }
+    }
+    return indexToReplace;
+}
+
 int simulateOptimal(const std::vector<int> &pageRefs, int numFrames) {
     std::vector<int> frames;
     int pageFaults = 0;
@@ -150,50 +161,29 @@ int simulateOptimal(const std::vector<int> &pageRefs, int numFrames) {
             printf("MISS\n");
             pageFaults++;
 
-            int pv = -1;
-            if (tp->isFull()) {
-                int indexToReplace = 0;
-                int farthest = find(pageRefs.begin() + i + 1, pageRefs.end(), frames[0]) - pageRefs.begin();
-                for (int j = 1; j < frames.size(); ++j) {
-                    int nextUse = find(pageRefs.begin() + i + 1, pageRefs.end(), frames[j]) - pageRefs.begin();
-                    if (nextUse > farthest) { // Busca la página que se usará más tarde
-                        farthest = nextUse;
-                        indexToReplace = j;
-                    }
-                }
-                pv = frames[indexToReplace];
-            }
-            else
-                frames.push_back(page);
+            int lowprio = -1;
+            int indexToReplace = farthest(pageRefs, frames, i);
+            if (tp->isFull())
+                lowprio = frames[indexToReplace];
 
-            tp->getFrame(pageRefs[i], pv);
+            if (tp->getFrame(pageRefs[i], lowprio))
+                frames.erase(frames.begin() + indexToReplace);
+            
+            frames.push_back(page);
         }
-        else
+        else {
             printf("HIT\n");
-
-        // if (std::find(frames.begin(), frames.end(), page) == frames.end()){
-        //     pageFaults++;
-        //     if (frames.size() == numFrames) { // Si la memoria está llena
-        //         int farthest = -1, indexToReplace = -1;
-        //         for (int j = 0; j < frames.size(); ++j) {
-        //             int nextUse = find(pageRefs.begin() + i + 1, pageRefs.end(), frames[j]) - pageRefs.begin();
-        //             if (nextUse > farthest) { // Busca la página que se usará más tarde
-        //                 farthest = nextUse;
-        //                 indexToReplace = j;
-        //             }
-        //         }
-
-        //         frames.erase(frames.begin() + indexToReplace); // Reemplaza esa página
-        //     }
-        //     frames.push_back(page); // Agrega la nueva página
-        // }
+            std::vector<int>::iterator it = find(frames.begin(), frames.end(), page);
+            frames.erase(it);
+            frames.push_back(page);
+        }
+        tp->print();
     }
     return pageFaults; // Devuelve el total de fallos de página
 }
 
 // Algoritmo Clock
-int simulateClock(const std::vector<int> &pageRefs, int numFrames)
-{
+int simulateClock(const std::vector<int> &pageRefs, int numFrames) {
     std::vector<int> frames(numFrames, -1);     // Vector inicializado con -1 para representar marcos vacíos
     std::vector<bool> useBit(numFrames, false); // Bits de uso para cada marco
     int pageFaults = 0, pointer = 0;            // Contador de fallos y puntero del reloj
@@ -286,11 +276,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-<<<<<<< HEAD
     std::cout << pageRefs.size()-pageFaults << " - " << pageFaults << std::endl;
     std::cout << "Fallos de página: " << pageFaults << std::endl; // Imprime los fallos de página
-=======
-    std::cout << "Fallos de pagina: " << pageFaults << std::endl; // Imprime los fallos de página
->>>>>>> main
     return 0;
 }
