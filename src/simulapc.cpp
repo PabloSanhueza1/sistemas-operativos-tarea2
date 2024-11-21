@@ -136,7 +136,7 @@ public:
     void logChange(const std::string &action, int tamAnterior, int tamNuevo)
     {
         // action puede ser 'Duplicado' o 'Reducido'
-        logFile << "Cambio de tamaño de la cola: " << action << " de " << tamAnterior << "(" << count << ")" << " a " << tamNuevo << " elementos." << std::endl;
+        logFile << "Cambio de tamaño de la cola: " << action << " de " << tamAnterior << " (actualmente hay:" << count << ")" << " a " << tamNuevo << " elementos." << std::endl;
     }
 
     void logChange(const std::string &message)
