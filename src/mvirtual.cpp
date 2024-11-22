@@ -60,17 +60,14 @@ class TablePages {
     }
 };
 
-void loadReferences(const std::string &filename, std::vector<int> &pageRefs)
-{
+void loadReferences(const std::string &filename, std::vector<int> &pageRefs) {
     std::ifstream file(filename); // Abre el archivo en modo de lectura
-    if (!file.is_open())
-    {                                                                          // Verifica si el archivo no se abrió correctamente
-        std::cerr << "Error al abrir el archivo de referencias." << std::endl; // Muestra un mensaje de error
-        exit(1);                                                               // Termina el programa con un código de error
+    if (!file.is_open()) { 
+        std::cerr << "Error al abrir el archivo de referencias." << std::endl;
+        exit(1);
     }
     int page;
-    while (file >> page)
-    {                             // Lee cada número de página del archivo
+    while (file >> page) {
         pageRefs.push_back(page); // Lo agrega al vector de referencias
     }
     file.close(); // Cierra el archivo después de leerlo
@@ -184,28 +181,40 @@ int simulateOptimal(const std::vector<int> &pageRefs, int numFrames) {
 
 // Algoritmo Clock
 int simulateClock(const std::vector<int> &pageRefs, int numFrames) {
-    std::vector<int> frames(numFrames, -1);     // Vector inicializado con -1 para representar marcos vacíos
-    std::vector<bool> useBit(numFrames, false); // Bits de uso para cada marco
-    int pageFaults = 0, pointer = 0;            // Contador de fallos y puntero del reloj
+    std::vector<int> frames;
+    std::vector<bool> useBit;
+    int pageFaults = 1, pointer = 0;            
+    TablePages *tp = new TablePages(numFrames);
 
-    for (int page : pageRefs)
-    { // Recorre cada referencia de página
-        auto it = find(frames.begin(), frames.end(), page);
-        if (it == frames.end())
-        {                 // Si no está en memoria
-            pageFaults++; // Incrementa los fallos de página
-            while (useBit[pointer])
-            { // Busca un marco con bit de uso 0
-                useBit[pointer] = false;
-                pointer = (pointer + 1) % numFrames; // Avanza el puntero
+    frames.push_back(pageRefs[0]);
+    useBit.push_back(true);
+    tp->getFrame(pageRefs[0], -1);
+
+    for (int i = 1; i < pageRefs.size(); i++) {
+        int page = pageRefs[i];
+        printf("%d: %2d\n", i+1, page);
+
+        if (!tp->referencedVirtualPage(page)) {
+            pageFaults++; 
+            if (!tp->isFull()) {
+                tp->getFrame(page, -1);
+                frames.push_back(page);
+                useBit.push_back(true);
             }
-            frames[pointer] = page;              // Reemplaza la página
-            useBit[pointer] = true;              // Marca el bit de uso como 1
-            pointer = (pointer + 1) % numFrames; // Avanza el puntero
+            else {
+                while (useBit[pointer]) {
+                    useBit[pointer] = false;
+                    pointer = (pointer + 1) % frames.size();
+                }
+                tp->getFrame(page, frames[pointer]);
+                frames[pointer] = page;
+                useBit[pointer] = true;
+                pointer = (pointer + 1) % numFrames; 
+            }
         }
-        else
-        {                                       // Si está en memoria
-            useBit[it - frames.begin()] = true; // Marca el bit de uso como 1
+        else {
+            std::vector<int>::iterator it = frames.begin();
+            useBit[it - frames.begin()] = true;
         }
     }
     return pageFaults; // Devuelve el total de fallos de página
@@ -217,35 +226,30 @@ int main(int argc, char *argv[]) {
     std::string filename;
 
     int opt;
-    while ((opt = getopt(argc, argv, "m:a:f:")) != -1)
-    {
-        switch (opt)
-        {
-        case 'm':
-            try 
-            {
-                numFrames = std::stoi(optarg);
-            } 
-            catch (const std::invalid_argument& e) 
-            {
-                std::cerr << "El tamaño de marco no es un entero" << std::endl;
+    while ((opt = getopt(argc, argv, "m:a:f:")) != -1) {
+        switch (opt) {
+            case 'm':
+                try {
+                    numFrames = std::stoi(optarg);
+                } 
+                catch (const std::invalid_argument& e) {
+                    std::cerr << "El tamaño de marco no es un entero" << std::endl;
+                    return 1;
+                }    
+                break;
+            case 'a':
+                algorithm = optarg;
+                break;
+            case 'f':
+                filename = optarg;
+                break;
+            default:
+                std::cerr << argv[0] << " -m <num_frames> -a <algoritmo> -f <archivo_referencias>" << std::endl;
                 return 1;
-            }    
-            break;
-        case 'a':
-            algorithm = optarg;
-            break;
-        case 'f':
-            filename = optarg;
-            break;
-        default:
-            std::cerr << argv[0] << " -m <num_frames> -a <algoritmo> -f <archivo_referencias>" << std::endl;
-            return 1;
         }
     }
     
-    if (numFrames < 1) 
-    {
+    if (numFrames < 1) {
         std::cerr << "Debe ingresar número de marcos válido." << std::endl;
         return 1;
     }
@@ -254,24 +258,20 @@ int main(int argc, char *argv[]) {
     loadReferences(filename, pageRefs); // Carga las referencias de página
 
     int pageFaults = 0;
+
     if (algorithm == "FIFO")
-    {
         pageFaults = simulateFIFO(pageRefs, numFrames);
-    }
+
     else if (algorithm == "LRU")
-    {
         pageFaults = simulateLRU(pageRefs, numFrames);
-    }
+
     else if (algorithm == "Optimal")
-    {
         pageFaults = simulateOptimal(pageRefs, numFrames);
-    }
+
     else if (algorithm == "Clock")
-    {
         pageFaults = simulateClock(pageRefs, numFrames);
-    }
-    else
-    {
+
+    else {
         std::cout << "Algoritmo no reconocido. Use FIFO, LRU, Optimal o Clock." << std::endl;
         return 1;
     }
