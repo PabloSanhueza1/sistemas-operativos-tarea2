@@ -164,11 +164,6 @@ int simulateOptimal(const std::vector<int> &pageRefs, int numFrames) {
             
             frames.push_back(page);
         }
-        else {
-            std::vector<int>::iterator it = find(frames.begin(), frames.end(), page);
-            frames.erase(it);
-            frames.push_back(page);
-        }
     }
     return pageFaults;
 }
@@ -269,7 +264,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    std::cout << pageRefs.size()-pageFaults << " - " << pageFaults << std::endl;
+    // std::cout << pageRefs.size()-pageFaults << " - " << pageFaults << std::endl;
     std::cout << "Fallos de página: " << pageFaults << std::endl; // Imprime los fallos de página
     return 0;
 }
