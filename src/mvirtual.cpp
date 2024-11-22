@@ -31,11 +31,11 @@ class TablePages {
             int marco = marcosPagina[lowPriorityVP];
             available.insert(marco);
             marcosPagina.erase(lowPriorityVP);
-            printf("Got physical page %d, from %d\n", marco, lowPriorityVP);
+            // printf("Got physical page %d, from %d\n", marco, lowPriorityVP);
             g = true;
         }
 		int marcoDisponible = *available.begin();
-        printf("Gave physical page %d to virtual page %d\n", marcoDisponible, virtualPageNeeded);
+        // printf("Gave physical page %d to virtual page %d\n", marcoDisponible, virtualPageNeeded);
 		marcosPagina[virtualPageNeeded] = marcoDisponible;
         available.erase(marcoDisponible);
 		return g;
@@ -123,7 +123,7 @@ int simulateLRU(const std::vector<int> &pageRefs, int numFrames) {
             frames.push_back(page);
         }
     }
-    return pageFaults; // Devuelve el total de fallos de página
+    return pageFaults;
 }
 
 // retorna indice
@@ -132,11 +132,9 @@ int farthest(const std::vector<int> &pageRefs, const std::vector<int> &frames, i
         return -1;
     int indexToReplace = 0;
     int mx = find(pageRefs.begin() + from + 1, pageRefs.end(), frames[0]) - pageRefs.end();
-    printf("d%d %d\n", frames[0], mx);
     int distance;
     for (int i = 1; i < frames.size(); i++) {
         distance = find(pageRefs.begin() + from + 1, pageRefs.end(), frames[i]) - pageRefs.end();
-        printf("d%d %d\n", frames[i], distance);
         if (distance > mx) {
             mx = distance;
             indexToReplace = i;
@@ -150,12 +148,10 @@ int simulateOptimal(const std::vector<int> &pageRefs, int numFrames) {
     int pageFaults = 0;
     TablePages *tp = new TablePages(numFrames);
 
-    for (int i = 0; i < pageRefs.size(); ++i) { // Recorre cada referencia de página
+    for (int i = 0; i < pageRefs.size(); ++i) {
         int page = pageRefs[i];
-        printf("%d: %d\n", i+1, page);
 
         if (!tp->referencedVirtualPage(page)) {
-            printf("MISS\n");
             pageFaults++;
 
             int lowprio = -1;
@@ -169,14 +165,12 @@ int simulateOptimal(const std::vector<int> &pageRefs, int numFrames) {
             frames.push_back(page);
         }
         else {
-            printf("HIT\n");
             std::vector<int>::iterator it = find(frames.begin(), frames.end(), page);
             frames.erase(it);
             frames.push_back(page);
         }
-        tp->print();
     }
-    return pageFaults; // Devuelve el total de fallos de página
+    return pageFaults;
 }
 
 // Algoritmo Clock
@@ -192,7 +186,6 @@ int simulateClock(const std::vector<int> &pageRefs, int numFrames) {
 
     for (int i = 1; i < pageRefs.size(); i++) {
         int page = pageRefs[i];
-        printf("%d: %2d\n", i+1, page);
 
         if (!tp->referencedVirtualPage(page)) {
             pageFaults++; 
@@ -217,7 +210,7 @@ int simulateClock(const std::vector<int> &pageRefs, int numFrames) {
             useBit[it - frames.begin()] = true;
         }
     }
-    return pageFaults; // Devuelve el total de fallos de página
+    return pageFaults;
 }
 
 int main(int argc, char *argv[]) {
